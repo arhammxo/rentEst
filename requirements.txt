@@ -1,1 +1,4 @@
 homeharvest
+csv
+pandas
+requests
