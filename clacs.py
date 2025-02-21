@@ -8,7 +8,7 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
 
     reader = csv.DictReader(infile)
     # Add all new columns to headers
-    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'maintenance_cost', 'noi', 'cap_rate']
+    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'tax_used', 'hoa_fee_used', 'noi', 'cap_rate']
     
     writer = csv.DictWriter(outfile, fieldnames=fieldnames)
     writer.writeheader()
@@ -61,19 +61,28 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
 
         row['fre'] = row['fre_monthly'] * 12
 
-        # Add maintenance cost calculation (2% of list_price)
-        try:
-            list_price = float(row.get('list_price', '0') or '0')
-            row['maintenance_cost'] = list_price * 0.02
-        except (ValueError, KeyError):
-            row['maintenance_cost'] = 0.0
-
         # Add NOI calculation
         try:
             fre_value = float(row['fre'])
             tax = float(row.get('tax') or '0')
+            
+            # New tax calculation when tax is 0
+            if tax == 0:
+                list_price = float(row.get('list_price', '0') or '0')
+                if list_price > 0:
+                    tax = 0.01 * list_price
+            row['tax_used'] = tax  # Add tax value used
+            
             hoa_fee = float(row.get('hoa_fee') or '0')
-            row['noi'] = fre_value - (tax + hoa_fee)
+            
+            # Update HOA fee to 2% of list_price if zero
+            if hoa_fee == 0:
+                list_price = float(row.get('list_price', '0') or '0')
+                if list_price > 0:
+                    hoa_fee = (0.0015 * list_price)/12
+            row['hoa_fee_used'] = hoa_fee  # Add HOA fee value used
+
+            row['noi'] = fre_value - (tax + (hoa_fee * 12))
             
             # Calculate cap rate
             list_price = float(row.get('list_price', '0') or '0')
