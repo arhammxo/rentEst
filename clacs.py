@@ -1,14 +1,14 @@
 import csv
 
 input_file = 'updated_for_sale_with_ptr.csv'
-output_file = 'cap_rate.csv'
+output_file = 'cash_yield.csv'
 
 with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
      open(output_file, 'w', newline='', encoding='utf-8') as outfile:
 
     reader = csv.DictReader(infile)
     # Add all new columns to headers
-    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'tax_used', 'hoa_fee_used', 'noi', 'cap_rate']
+    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'tax_used', 'hoa_fee_used', 'noi', 'cap_rate', 'transaction_est', 'cash_equity', 'ucf', 'cash_yield']
     
     writer = csv.DictWriter(outfile, fieldnames=fieldnames)
     writer.writeheader()
@@ -82,7 +82,9 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
                     hoa_fee = (0.0015 * list_price)/12
             row['hoa_fee_used'] = hoa_fee  # Add HOA fee value used
 
-            row['noi'] = fre_value - (tax + (hoa_fee * 12))
+            # row['noi'] = fre_value - (tax + (hoa_fee * 12))
+            row['noi'] = fre_value - (hoa_fee * 12)
+
             
             # Calculate cap rate
             list_price = float(row.get('list_price', '0') or '0')
@@ -90,8 +92,23 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
                 row['cap_rate'] = round((row['noi'] / list_price) * 100, 2)
             else:
                 row['cap_rate'] = 0.0
+
+            # New financial metrics calculations
+            transaction_est = 0.01 * list_price
+            cash_equity = 0.5 * (list_price + transaction_est)
+            ucf = row['noi'] - row['tax_used']
+            cash_yield = (ucf / cash_equity) * 100 if cash_equity != 0 else 0.0
+            
+            row['transaction_est'] = round(transaction_est, 2)
+            row['cash_equity'] = round(cash_equity, 2)
+            row['ucf'] = round(ucf, 2)
+            row['cash_yield'] = round(cash_yield, 2)
         except (ValueError, KeyError):
             row['noi'] = 0
             row['cap_rate'] = 0.0
+            row['transaction_est'] = 0.0
+            row['cash_equity'] = 0.0
+            row['ucf'] = 0.0
+            row['cash_yield'] = 0.0
         
         writer.writerow(row)
