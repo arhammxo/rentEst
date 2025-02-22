@@ -8,7 +8,9 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
 
     reader = csv.DictReader(infile)
     # Add all new columns to headers
-    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'tax_used', 'hoa_fee_used', 'noi', 'cap_rate', 'transaction_est', 'cash_equity', 'ucf', 'cash_yield']
+    fieldnames = reader.fieldnames + ['bre', 'af', 'fre_monthly', 'fre', 'tax_used', 'hoa_fee_used', 
+                   'noi_year1', 'noi_year2', 'noi_year3', 'noi_year4', 'noi_year5', 
+                   'cap_rate', 'transaction_est', 'cash_equity', 'ucf', 'cash_yield']
     
     writer = csv.DictWriter(outfile, fieldnames=fieldnames)
     writer.writeheader()
@@ -82,21 +84,24 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
                     hoa_fee = (0.0015 * list_price)/12
             row['hoa_fee_used'] = hoa_fee  # Add HOA fee value used
 
-            # row['noi'] = fre_value - (tax + (hoa_fee * 12))
-            row['noi'] = fre_value - (hoa_fee * 12)
+            # Calculate 5-year NOI with 3% annual increases
+            current_fre = fre_value
+            for year in range(1, 6):
+                annual_noi = current_fre - (hoa_fee * 12)
+                row[f'noi_year{year}'] = round(annual_noi, 2)
+                current_fre *= 1.03  # 3% annual increase
 
-            
-            # Calculate cap rate
+            # Calculate cap rate using first year NOI
             list_price = float(row.get('list_price', '0') or '0')
             if list_price != 0:
-                row['cap_rate'] = round((row['noi'] / list_price) * 100, 2)
+                row['cap_rate'] = round((row['noi_year1'] / list_price) * 100, 2)
             else:
                 row['cap_rate'] = 0.0
 
             # New financial metrics calculations
             transaction_est = 0.01 * list_price
             cash_equity = 0.5 * (list_price + transaction_est)
-            ucf = row['noi'] - row['tax_used']
+            ucf = row['noi_year1'] - row['tax_used']
             cash_yield = (ucf / cash_equity) * 100 if cash_equity != 0 else 0.0
             
             row['transaction_est'] = round(transaction_est, 2)
@@ -104,7 +109,9 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
             row['ucf'] = round(ucf, 2)
             row['cash_yield'] = round(cash_yield, 2)
         except (ValueError, KeyError):
-            row['noi'] = 0
+            # Initialize all year columns to 0 on error
+            for year in range(1, 6):
+                row[f'noi_year{year}'] = 0.0
             row['cap_rate'] = 0.0
             row['transaction_est'] = 0.0
             row['cash_equity'] = 0.0
