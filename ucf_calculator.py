@@ -1,4 +1,31 @@
 import csv
+import numpy as np
+import numpy_financial as npf
+
+def cumprinc(rate, nper, pv, start_period, end_period):
+    """Calculate cumulative principal paid over a period."""
+    monthly_rate = rate / 12
+    periods = nper * 12
+    schedule = np.zeros(periods)
+    payment = npf.pmt(monthly_rate, periods, pv)
+    
+    for period in range(start_period-1, end_period):
+        interest_payment = pv * monthly_rate
+        principal_payment = payment - interest_payment
+        schedule[period] = principal_payment
+        pv -= principal_payment
+    
+    return np.sum(schedule[start_period-1:end_period])
+
+def calculate_cumprinc_for_period(K40, G18, G19, K30):
+    start_period = (K40 - 1) * 12 + 1
+    end_period = K40 * 12
+    return -cumprinc(G18, G19, K30, start_period, end_period)
+
+# Mortgage calculation constants
+G18 = 7.500 / 100  # 7.5% interest rate
+G19 = 15           # 15 year loan term
+K40_values = [1, 2, 3, 4, 5]
 
 input_file = 'cash_yield.csv'
 output_file = 'final.csv'
@@ -8,8 +35,10 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
 
     reader = csv.DictReader(infile)
     fieldnames = reader.fieldnames + ['ucf_year1', 'ucf_year2', 'ucf_year3', 'ucf_year4', 'ucf_year5', 
-                                      'lmp', 'lcf_year1', 'lcf_year2', 'lcf_year3', 'lcf_year4', 'lcf_year5',
-                                      'eb_cash', 'eev', 'exit_value', 'cash_on_cash', 'irr']
+                                      'lmp', 'lcf_year1', 'lcf_year2', 'lcf_year3', 'lcf_year4', 'lcf_year5', 
+                                      'mpp', 'mortgage_ending_balance',
+                                      'eb_cash', 'eev', 'exit_value', 'cash_on_cash', 'irr'
+                                      ]
     
     writer = csv.DictWriter(outfile, fieldnames=fieldnames)
     writer.writeheader()
@@ -43,14 +72,19 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
         lcf_values = [row[f'lcf_year{year}'] for year in range(1, 6)]
         row['eb_cash'] = round(sum(lcf_values), 2)
 
-        # Load mortgage data for same property
-        mortgage_balance = 0.0
-        with open('mortgage.csv', 'r', encoding='utf-8') as mortgage_file:
-            mortgage_reader = csv.DictReader(mortgage_file)
-            for mortgage_row in mortgage_reader:
-                if mortgage_row['property_id'] == row['property_id']:
-                    mortgage_balance = float(mortgage_row.get('mortgage_ending_balance', 0))
-                    break
+        # Calculate mortgage balance directly
+        try:
+            cash_equity = float(row.get('cash_equity', 0))
+            total = sum(
+                calculate_cumprinc_for_period(K40, G18, G19, cash_equity)
+                for K40 in K40_values
+            )
+            ending_balance = cash_equity - total
+            row['mpp'] = round(total, 2)
+            row['mortgage_ending_balance'] = round(ending_balance, 2)
+        except (ValueError, TypeError):
+            row['mpp'] = 0.0
+            row['mortgage_ending_balance'] = 0.0
 
         # Calculate EEV and Exit Value
         try:
@@ -61,20 +95,22 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
             row['eev'] = 0.0
 
         try:
-            row['exit_value'] = round(row['eev'] - mortgage_balance + row['eb_cash'], 2)
+            row['exit_value'] = round(row['eev'] - row['mortgage_ending_balance'] + row['eb_cash'], 2)
         except KeyError:
             row['exit_value'] = 0.0
 
         # Calculate Cash-on-Cash and IRR
         try:
+            exit_value = float(row.get('exit_value', 0))
             cash_equity = float(row.get('cash_equity', 0))
-            row['cash_on_cash'] = round(row['exit_value'] / cash_equity, 2) if cash_equity != 0 else 0.0
-        except (ValueError, KeyError):
+            row['cash_on_cash'] = round(exit_value / cash_equity, 2) if cash_equity != 0 else 0.0
+        except (ValueError, KeyError, TypeError):
             row['cash_on_cash'] = 0.0
 
         try:
-            row['irr'] = round(row['cash_on_cash'] ** -0.8, 2) if row['cash_on_cash'] != 0 else 0.0
-        except (ValueError, KeyError):
+            coc = float(row['cash_on_cash'])
+            row['irr'] = round(coc ** -0.8, 2) if coc != 0 else 0.0
+        except (ValueError, KeyError, TypeError):
             row['irr'] = 0.0
 
         writer.writerow(row) 
