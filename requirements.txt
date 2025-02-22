@@ -2,3 +2,4 @@ homeharvest
 csv
 pandas
 requests
+numpy-financial
