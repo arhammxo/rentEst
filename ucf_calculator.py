@@ -89,13 +89,13 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
         # Calculate EEV and Exit Value
         try:
             noi_year5 = float(row.get('noi_year5', 0))
-            cap_rate = float(row.get('cap_rate', 0))
-            row['eev'] = round(noi_year5 / cap_rate, 2) if cap_rate != 0 else 0.0
+            cap_rate = float(row.get('cap_rate', 0)) / 100  # Convert percentage to decimal
+            row['eev'] = round(noi_year5 / cap_rate, 4) if cap_rate != 0 else 0.0
         except (ValueError, KeyError):
             row['eev'] = 0.0
 
         try:
-            row['exit_value'] = round(row['eev'] - row['mortgage_ending_balance'] + row['eb_cash'], 2)
+            row['exit_value'] = round(row['eev'] - row['mortgage_ending_balance'] + row['eb_cash'], 4)
         except KeyError:
             row['exit_value'] = 0.0
 
@@ -103,13 +103,13 @@ with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
         try:
             exit_value = float(row.get('exit_value', 0))
             cash_equity = float(row.get('cash_equity', 0))
-            row['cash_on_cash'] = round(exit_value / cash_equity, 2) if cash_equity != 0 else 0.0
+            row['cash_on_cash'] = round(exit_value / cash_equity, 4) if cash_equity != 0 else 0.0
         except (ValueError, KeyError, TypeError):
             row['cash_on_cash'] = 0.0
 
         try:
             coc = float(row['cash_on_cash'])
-            row['irr'] = round(coc ** -0.8, 2) if coc != 0 else 0.0
+            row['irr'] = round((coc ** (1/5)) - 1, 4) if coc != 0 else 0.0
         except (ValueError, KeyError, TypeError):
             row['irr'] = 0.0
 
