@@ -1,5 +1,8 @@
 homeharvest
-csv
 pandas
 requests
 numpy-financial
+fastapi
+uvicorn
+pandas
+sqlalchemy
